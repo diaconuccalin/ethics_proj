@@ -1,0 +1,10 @@
+# PyCharm locations
+.idea
+
+# Custom project locations
+/data/voc/
+/data/COCO2014/
+/data/ConceptNet/
+/data/VOC2007/
+/weights/
+/results/
