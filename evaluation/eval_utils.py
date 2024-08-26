@@ -6,6 +6,7 @@ from torch.nn.functional import pad
 from torchmetrics import Accuracy
 from torchmetrics import ConfusionMatrix
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
+from torchvision import transforms as T
 
 from constants import *
 from data.SetTypes import SetTypes
@@ -777,3 +778,14 @@ def conf_matrix(all_preds_tensor, all_targets_tensor, num_classes, save_path):
     plt.title("Confusion Matrix")
 
     plt.savefig(save_path)
+
+
+def dict_to_numpy_box(box_dict):
+    return np.array(
+        [box_dict["xmin"], box_dict["ymin"], box_dict["xmax"], box_dict["ymax"]],
+        dtype=np.float32,
+    )
+
+
+def tensor_to_pil(tensor):
+    return T.ToPILImage()(tensor).convert("RGB")

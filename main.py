@@ -3,7 +3,11 @@ import torch
 from evaluation.evaluation_pipelines import voc_evaluation
 
 
-def main(session_name):
+def main(session_name, device):
+    return voc_evaluation(session_name, device)
+
+
+if __name__ == "__main__":
     # Set cuda device
     cuda_device = None
     if torch.cuda.is_available():
@@ -15,11 +19,12 @@ def main(session_name):
         print("DEVICE SET TO CPU!\n")
         device = torch.device("cpu")
 
-    voc_evaluation(session_name, device)
-
-
-if __name__ == "__main__":
-    main("frcnn_standard")
-    main("frcnn_kg_57")
-    main("frcnn_freq_info_all")
-    main("frcnn_freq_info_500")
+    # main("frcnn_standard", device)
+    # main("frcnn_kg_57", device)
+    # main("frcnn_freq_info_all", device)
+    # main("frcnn_freq_info_500", device)
+    results = main("yolo", device)
+    with open("results/yolo_results.txt", "w") as f:
+        for el in results:
+            for key, value in el.items():
+                f.write(str(key) + " " + str(value) + "\n")

@@ -11,6 +11,8 @@ from evaluation.eval_utils import (
     voc_metrics,
     find_p_hat,
     find_top_k,
+    dict_to_numpy_box,
+    tensor_to_pil,
 )
 from models.ModelTypes import ModelTypes
 from models.model_utils import get_eval_model
@@ -206,3 +208,103 @@ def evaluate_standard_model_kg(
         torch.cuda.empty_cache()
 
     return pred_boxes, pred_labels, pred_scores, true_boxes, true_labels
+
+
+def evaluate_model_yolo_freq(
+    model,
+    dataloader,
+    num_classes,
+    device,
+    bk,
+    lk,
+    S,
+    num_iters,
+    epsilon,
+    topk,
+    confidence_threshold=1e-05,
+):
+    results = []
+
+    with torch.no_grad():  # Disable gradient calculation
+        for images, targets in tqdm(dataloader):
+            # Convert tensor images to PIL images
+            pil_images = [tensor_to_pil(image) for image in images]
+
+            # Run inference
+            outputs = model.predict(
+                pil_images, conf=confidence_threshold, verbose=False
+            )
+
+            for i, output in enumerate(outputs):
+                # Debugging: Check if outputs are generated
+                # if len(output.boxes) == 0:
+                #   print(f"No detections for image {i}")
+
+                pred_boxes = (
+                    output.boxes.xyxy.cpu().numpy()
+                )  # Predicted boxes in [x1, y1, x2, y2] format
+                pred_scores = torch.tensor(output.boxes.conf.cpu().numpy()).to(
+                    device
+                )  # Convert to tensor
+                pred_labels = torch.tensor(output.boxes.cls.cpu().numpy()).to(
+                    device
+                )  # Convert to tensor
+
+                # Debugging: Print detections info
+                # print(f"Image {i}: {len(pred_boxes)} boxes detected")
+
+                # Convert target boxes to numpy arrays
+                true_boxes = np.array(
+                    [dict_to_numpy_box(box) for box in targets[i]["boxes"]]
+                )
+                true_labels = np.array(targets[i]["labels"])
+
+                # Knowledge-based processing
+                new_predictions = torch.zeros((pred_boxes.shape[0], num_classes)).to(
+                    device
+                )
+                for l in range(pred_boxes.shape[0]):
+                    label = int(pred_labels[l].item())  # Ensure the label is an integer
+                    new_predictions[l, label] = pred_scores[l]
+
+                # Debugging: Print original predictions before knowledge injection
+                # print(f"Original Predictions for Image {i}:\n{new_predictions}")
+
+                # Compute knowledge-aware predictions using the consistency matrix
+                p_hat = find_p_hat(
+                    torch.tensor(pred_boxes).to(device),
+                    new_predictions,
+                    bk,
+                    lk,
+                    S,
+                    num_iters,
+                    epsilon,
+                    device=device,
+                )
+
+                # Debugging: Print knowledge-injected predictions
+                # print(f"Knowledge-Injected Predictions (p_hat) for Image {i}:\n{p_hat}")
+
+                # Find top-k predictions based on knowledge-enhanced scores
+                predk, boxk, labk, scok = find_top_k(
+                    p_hat, torch.tensor(pred_boxes).to(device), topk, device=device
+                )
+                labk = labk - 1
+
+                # Convert tensors back to numpy for final output
+                boxk = boxk.cpu().numpy()
+                labk = labk.cpu().numpy()
+                scok = scok.cpu().numpy()
+
+                # Append results for this image
+                results.append(
+                    {
+                        "pred_boxes": boxk,
+                        "pred_scores": scok,
+                        "pred_labels": labk,
+                        "true_boxes": true_boxes,
+                        "true_labels": true_labels,
+                    }
+                )
+
+    return results

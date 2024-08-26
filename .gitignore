@@ -1,5 +1,6 @@
 # PyCharm locations
 .idea
+*__pycache__*
 
 # Custom project locations
 /data/voc/
